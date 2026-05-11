@@ -5,6 +5,8 @@ import { AnimatePresence } from 'framer-motion';
 import { useCanvasStore } from '@/store/canvasStore';
 import { CanvasElement } from './CanvasElement';
 import { Transformer } from './Transformer';
+import { CursorPresence } from '@/components/Cursors/CursorPresence';
+import { usePresence } from '@/hooks/usePresence';
 import type { ToolType } from '@aether/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -253,6 +255,9 @@ export function InfiniteCanvas() {
     [selectElement],
   );
 
+  // ── Real-time presence ──────────────────────────────────────────────────────
+  const { emitCursor, clearCursor } = usePresence(screenToCanvas);
+
   // ── Cursor ──────────────────────────────────────────────────────────────────
   const cursor =
     isSpaceDown
@@ -276,6 +281,8 @@ export function InfiniteCanvas() {
         className={`absolute inset-0 overflow-hidden select-none ${cursor}`}
         style={{ background: '#030712' }}
         onMouseDown={handleCanvasMouseDown}
+        onMouseMove={(e) => emitCursor(e.clientX, e.clientY)}
+        onMouseLeave={clearCursor}
       >
         {/* Dot grid */}
         <div
@@ -329,6 +336,9 @@ export function InfiniteCanvas() {
           />
         )}
       </AnimatePresence>
+
+      {/* ── Remote cursors (canvas-space → screen-space, pointer-events:none) ── */}
+      <CursorPresence viewport={viewport} />
     </div>
   );
 }

@@ -8,6 +8,7 @@ A Figma-inspired infinite canvas design tool built as a TurboRepo monorepo. Aeth
 
 - [Tech Stack](#tech-stack)
 - [Repository Structure](#repository-structure)
+- [Backend Setup (Phase 3)](#backend-setup-phase-3)
 - [Getting Started](#getting-started)
 - [Architecture](#architecture)
   - [Coordinate System](#coordinate-system)
@@ -30,6 +31,8 @@ A Figma-inspired infinite canvas design tool built as a TurboRepo monorepo. Aeth
 
 ## Tech Stack
 
+**Frontend**
+
 | Layer | Technology |
 |---|---|
 | Monorepo | [TurboRepo](https://turbo.build) v2 |
@@ -41,6 +44,16 @@ A Figma-inspired infinite canvas design tool built as a TurboRepo monorepo. Aeth
 | State | [Zustand](https://zustand-demo.pmnd.rs) 5 |
 | Icons | [Lucide React](https://lucide.dev) |
 | Rendering | Plain HTML `div` elements transformed via CSS — no `<canvas>`, no SVG scene graph |
+| Real-time (client) | [Socket.io-client](https://socket.io) v4 |
+
+**Backend**
+
+| Layer | Technology |
+|---|---|
+| Server | [Express](https://expressjs.com) 4 + Node.js HTTP server |
+| Database ORM | [Prisma](https://www.prisma.io) 5.22 |
+| Database | PostgreSQL (any v14+ instance) |
+| Real-time (server) | [Socket.io](https://socket.io) v4 — WebSocket with polling fallback |
 
 ---
 
@@ -48,51 +61,259 @@ A Figma-inspired infinite canvas design tool built as a TurboRepo monorepo. Aeth
 
 ```
 aether/
-├── turbo.json                    # Task pipeline (build, dev, lint, type-check)
+├── turbo.json                    # Task pipeline (build, dev, lint, type-check, db:*)
 ├── pnpm-workspace.yaml           # Workspace globs
 ├── package.json                  # Root devDependencies (turbo, typescript)
 │
 ├── packages/
 │   ├── types/                    # @aether/types — shared TypeScript interfaces
-│   │   └── src/index.ts
+│   │   └── src/index.ts          #   SceneNode, ToolType, SaveProjectPayload,
+│   │                             #   UpdateProjectPayload, ProjectResponse,
+│   │                             #   RemoteCursor, UserJoinPayload
 │   └── ui/                       # @aether/ui — shared React components
 │       └── src/
 │           ├── GlassCard.tsx
 │           └── index.ts
 │
 └── apps/
-    └── web/                      # @aether/web — the design tool
-        ├── next.config.ts
-        ├── tailwind.config.ts
-        ├── postcss.config.js
+    ├── web/                      # @aether/web — the design tool (Next.js)
+    │   ├── next.config.ts
+    │   ├── tailwind.config.ts
+    │   ├── postcss.config.js
+    │   ├── tsconfig.json
+    │   └── src/
+    │       ├── app/
+    │       │   ├── layout.tsx
+    │       │   ├── page.tsx         # Three-column workspace layout + useAutoSave
+    │       │   └── globals.css
+    │       ├── store/
+    │       │   └── canvasStore.ts   # Zustand store (elements, save, presence)
+    │       ├── lib/
+    │       │   └── socket.ts        # Socket.io-client singleton (SSR-safe)
+    │       ├── hooks/
+    │       │   ├── useAutoSave.ts   # 2-second debounced auto-save
+    │       │   └── usePresence.ts   # Socket connection + throttled cursor emit
+    │       └── components/
+    │           ├── Canvas/
+    │           │   ├── InfiniteCanvas.tsx   # Viewport, pan, zoom, placement
+    │           │   ├── CanvasElement.tsx    # Single element renderer
+    │           │   └── Transformer.tsx      # Selection bounding box + resize handles
+    │           ├── Cursors/
+    │           │   └── CursorPresence.tsx   # Remote cursor overlay
+    │           ├── Toolbar/
+    │           │   └── Toolbar.tsx          # Floating tool switcher
+    │           ├── TopBar/
+    │           │   └── TopBar.tsx           # Header with SyncIndicator
+    │           ├── Inspector/
+    │           │   └── InspectorPanel.tsx   # Right sidebar — properties editor
+    │           └── Layers/
+    │               └── LayersPanel.tsx      # Left sidebar — layer list
+    │
+    └── server/                   # @aether/server — Express + Socket.io + Prisma
+        ├── package.json
         ├── tsconfig.json
+        ├── prisma/
+        │   └── schema.prisma     # Project model (id, name, nodes Json, timestamps)
         └── src/
-            ├── app/
-            │   ├── layout.tsx
-            │   ├── page.tsx         # Three-column workspace layout
-            │   └── globals.css
-            ├── store/
-            │   └── canvasStore.ts   # Zustand store
-            └── components/
-                ├── Canvas/
-                │   ├── InfiniteCanvas.tsx   # Viewport, pan, zoom, placement
-                │   ├── CanvasElement.tsx    # Single element renderer
-                │   └── Transformer.tsx      # Selection bounding box + resize handles
-                ├── Toolbar/
-                │   └── Toolbar.tsx          # Floating tool switcher
-                ├── TopBar/
-                │   └── TopBar.tsx           # App header with layer count
-                ├── Inspector/
-                │   └── InspectorPanel.tsx   # Right sidebar — properties editor
-                └── Layers/
-                    └── LayersPanel.tsx      # Left sidebar — layer list
+            ├── index.ts          # Express app, HTTP server, Socket.io mount point
+            ├── routes/
+            │   └── projects.ts   # POST/GET/PUT /api/projects
+            └── socket/
+                └── cursors.ts    # cursor-move relay + disconnect cleanup
 ```
+
+---
+
+## Backend Setup (Phase 3)
+
+### Prerequisites
+
+- **Node.js** ≥ 20
+- **pnpm** ≥ 9 (`brew install pnpm`)
+- **PostgreSQL** ≥ 14 running locally or accessible via a connection URL
+
+### 1. Configure environment variables
+
+Create `apps/server/.env`:
+
+```env
+DATABASE_URL="postgresql://postgres:password@localhost:5432/aether"
+PORT=4000
+CLIENT_ORIGIN="http://localhost:3000"
+```
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | Prisma-compatible PostgreSQL connection string |
+| `PORT` | Port the Express server listens on (default: 4000) |
+| `CLIENT_ORIGIN` | The web app origin — used for CORS and Socket.io |
+
+The web app reads the server URL from `NEXT_PUBLIC_API_URL`. Create `apps/web/.env.local`:
+
+```env
+NEXT_PUBLIC_API_URL="http://localhost:4000"
+```
+
+### 2. Push the database schema
+
+```bash
+# Generate the Prisma client from schema.prisma
+pnpm --filter @aether/server db:generate
+
+# Create the `projects` table in your PostgreSQL database
+pnpm --filter @aether/server db:push
+```
+
+This creates a single `projects` table:
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | `TEXT` (cuid) | Primary key, auto-generated |
+| `name` | `TEXT` | Project display name |
+| `nodes` | `JSONB` | Serialised `SceneNode[]` array |
+| `createdAt` | `TIMESTAMP` | Auto-set on insert |
+| `updatedAt` | `TIMESTAMP` | Auto-updated on every write |
+
+### 3. Start all services
+
+```bash
+# In one terminal — starts both web (port 3000) and server (port 4000)
+pnpm dev
+```
+
+TurboRepo runs `dev` tasks in both `apps/web` and `apps/server` concurrently. The server uses `ts-node` in watch mode.
+
+---
+
+### REST API
+
+Base URL: `http://localhost:4000/api`
+
+#### `POST /projects`
+
+Create a new project.
+
+**Request body:**
+```json
+{ "name": "My Design", "nodes": [] }
+```
+
+**Response `201`:**
+```json
+{
+  "id": "clxyz123...",
+  "name": "My Design",
+  "nodes": [],
+  "createdAt": "2026-05-11T00:00:00.000Z",
+  "updatedAt": "2026-05-11T00:00:00.000Z"
+}
+```
+
+#### `GET /projects/:id`
+
+Fetch a saved project by ID. Returns `404` if not found.
+
+#### `PUT /projects/:id`
+
+Replace the `nodes` array of an existing project.
+
+**Request body:**
+```json
+{ "nodes": [{ "id": "...", "type": "rect", ... }] }
+```
+
+Returns the full updated `ProjectResponse`. Returns `404` if the project ID does not exist.
+
+---
+
+### Auto-Save Architecture
+
+Auto-save is a debounced write triggered whenever the `elements` array in the Zustand store changes.
+
+```
+elements change in store
+    │
+    └─► useAutoSave (apps/web/src/hooks/useAutoSave.ts)
+            │  clears previous timer
+            └─► setTimeout(save, 2000ms)
+                    │
+                    └─► canvasStore.save()
+                            │
+                            ├─ no projectId → POST /api/projects  → stores returned id
+                            └─ has projectId → PUT /api/projects/:id
+```
+
+Save status is reflected in the **SyncIndicator** pill in the TopBar:
+
+| Status | Dot colour | Label |
+|---|---|---|
+| `idle` | Dim white | Auto-save |
+| `saving` | Blue `#60a5fa` (pulsing) | Saving… |
+| `saved` | Green `#34d399` | Saved + relative time |
+| `error` | Red `#f87171` | Sync error |
+
+The indicator shows relative time ("Saved 2m ago") and refreshes every 10 seconds via a local `setInterval`.
+
+---
+
+### Real-Time Cursor Architecture
+
+Cursors are broadcast via Socket.io. Each browser tab is a client; the server relays events to all *other* tabs without processing them.
+
+#### Connection lifecycle
+
+```
+browser tab opens
+    │
+    └─► usePresence (apps/web/src/hooks/usePresence.ts)
+            │  socket.connect()
+            └─► emit 'user-join'  { userId, name, color }
+                    │
+                    └─► server stores socketId → userId mapping
+
+mouse moves on canvas
+    └─► screenToCanvas(clientX, clientY)  → canvas-space coords
+            └─► emit 'cursor-move' (throttled to ~30fps / 33ms)
+                    └─► server: socket.broadcast.emit('cursor-move', cursor)
+                            └─► all other tabs receive cursor-move
+
+tab closes / leaves canvas
+    └─► emit 'cursor-leave' { userId }
+            └─► server: socket.broadcast.emit('cursor-leave', userId)
+                    └─► other tabs remove the cursor overlay
+```
+
+#### Coordinate system
+
+Cursors are emitted in **canvas space** (the same coordinate system as `SceneNode.x/y`). `CursorPresence` converts to screen space for rendering:
+
+```typescript
+// canvas-space → screen-space
+const sx = cursor.x * viewport.scale + viewport.x;
+const sy = cursor.y * viewport.scale + viewport.y;
+```
+
+This means remote cursors track correctly even when the local user pans or zooms — the cursor position in canvas space is invariant, and the screen position is always derived fresh.
+
+#### Cursor smoothing
+
+`CursorPresence` uses Framer Motion spring animation on the `x`/`y` motion values:
+
+```typescript
+transition={{ type: 'spring', stiffness: 800, damping: 50, mass: 0.5 }}
+```
+
+At ~30fps socket emission from the remote peer, spring physics interpolate between frames for visually smooth movement without jitter.
+
+#### Disconnect cleanup
+
+The server maintains a `Map<socketId, userId>`. On `disconnect`, the server looks up the userId and emits `cursor-leave` on behalf of the disconnected tab, so stale cursors are never left on screen.
 
 ---
 
 ## Getting Started
 
-**Prerequisites:** Node ≥ 20, pnpm ≥ 9 (install via `brew install pnpm`).
+**Prerequisites:** Node ≥ 20, pnpm ≥ 9 (install via `brew install pnpm`), PostgreSQL ≥ 14.
 
 ```bash
 # Clone and install
@@ -100,7 +321,15 @@ git clone <repo-url> aether
 cd aether
 pnpm install
 
-# Start the dev server (http://localhost:3000)
+# Configure environment (see Backend Setup above for full details)
+cp apps/server/.env.example apps/server/.env   # edit DATABASE_URL
+echo 'NEXT_PUBLIC_API_URL=http://localhost:4000' > apps/web/.env.local
+
+# Push the database schema
+pnpm --filter @aether/server db:generate
+pnpm --filter @aether/server db:push
+
+# Start all services concurrently (web on :3000, server on :4000)
 pnpm dev
 
 # Type-check all packages
@@ -110,7 +339,7 @@ pnpm type-check
 pnpm build
 ```
 
-The `pnpm dev` command uses TurboRepo to run `next dev --turbopack` inside `apps/web`. Hot reload is active on all source files including workspace packages (`@aether/types`, `@aether/ui`), because Next.js is configured with `transpilePackages`.
+`pnpm dev` uses TurboRepo to run `next dev --turbopack` (web) and `ts-node --watch` (server) concurrently. Hot reload is active across all source files including workspace packages (`@aether/types`, `@aether/ui`), because Next.js is configured with `transpilePackages`.
 
 ---
 
@@ -228,16 +457,30 @@ The canvas uses a two-div structure so the Transformer SVG overlay is never clip
 A single flat Zustand store. No slices, no middleware.
 
 ```typescript
-interface CanvasState {
-  elements:         SceneNode[];       // ordered array; last = topmost z-order
-  selectedElementId: string | null;
-  activeTool:       ToolType;          // 'select' | 'rect' | 'circle'
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
+interface CanvasState {
+  // Scene
+  elements:          SceneNode[];       // ordered array; last = topmost z-order
+  selectedElementId: string | null;
+  activeTool:        ToolType;          // 'select' | 'rect' | 'circle'
+
+  // Persistence (Phase 3)
+  projectId:   string | null;           // null until first save
+  saveStatus:  SaveStatus;
+  lastSaved:   Date | null;
+
+  // Local user identity for cursor presence (Phase 3)
+  localUser: { userId: string; name: string; color: string };
+
+  // Actions
   addElement:    (element: SceneNode) => void;
   updateElement: (id: string, update: Partial<SceneNode>) => void;
   removeElement: (id: string) => void;
   selectElement: (id: string | null) => void;
   setActiveTool: (tool: ToolType) => void;
+  save:          () => Promise<void>;   // POST on first call, PUT on subsequent
+  loadProject:   (id: string) => Promise<void>;
 }
 ```
 
@@ -246,6 +489,8 @@ interface CanvasState {
 ```typescript
 updateElement(id, { x: 120, y: 80, width: 200 }); // single store write
 ```
+
+`localUser` is generated once at store initialisation: a random name from a preset list, a random color from a cursor palette, and a short UUID suffix. It is stable for the lifetime of the tab.
 
 Components that only care about a subset of state should use **selector subscriptions** to avoid re-rendering on unrelated changes:
 
@@ -392,6 +637,47 @@ interface SceneNode {
 type ToolType = 'select' | 'rect' | 'circle';
 ```
 
+### API payloads — `@aether/types`
+
+Shared between `@aether/web` (fetch calls) and `@aether/server` (route handlers):
+
+```typescript
+interface SaveProjectPayload {
+  name:  string;
+  nodes: SceneNode[];
+}
+
+interface UpdateProjectPayload {
+  nodes: SceneNode[];
+}
+
+interface ProjectResponse {
+  id:        string;
+  name:      string;
+  nodes:     SceneNode[];
+  createdAt: string;   // ISO 8601
+  updatedAt: string;
+}
+```
+
+### Real-time presence — `@aether/types`
+
+```typescript
+interface RemoteCursor {
+  userId: string;
+  name:   string;
+  color:  string;
+  x:      number;   // canvas-space X
+  y:      number;   // canvas-space Y
+}
+
+interface UserJoinPayload {
+  userId: string;
+  name:   string;
+  color:  string;
+}
+```
+
 ---
 
 ## Keyboard Shortcuts
@@ -447,6 +733,27 @@ type ToolType = 'select' | 'rect' | 'circle';
 | Click layer | Select / deselect element on canvas |
 | Right-click layer | Delete element |
 
+### TopBar SyncIndicator
+
+| State | Appearance | Trigger |
+|---|---|---|
+| `idle` | Dim dot, "Auto-save" | App load, no changes yet |
+| `saving` | Blue pulsing dot, "Saving…" | `save()` called |
+| `saved` | Green dot, "Saved X ago" | `save()` resolved |
+| `error` | Red dot, "Sync error" | `save()` rejected |
+
+---
+
+### Socket.io Events
+
+| Event | Direction | Payload | Description |
+|---|---|---|---|
+| `user-join` | client → server | `UserJoinPayload` | Sent once on socket connect |
+| `cursor-move` | client ↔ server | `RemoteCursor` | Throttled cursor position (~30fps) |
+| `cursor-leave` | client ↔ server | `string` (userId) | Cursor left canvas or tab closed |
+
+The server broadcasts all events to every socket *except* the sender (`socket.broadcast.emit`). It does not persist any presence state.
+
 ---
 
 ## Package Reference
@@ -467,10 +774,24 @@ The Next.js application. Dependencies:
 |---|---|
 | `next` 15 | App Router, Turbopack bundler |
 | `react` 19 | UI runtime |
-| `zustand` 5 | Canvas state store |
-| `framer-motion` 11 | Transformer fade, layer list animations, toolbar transitions |
+| `zustand` 5 | Canvas state store (elements, save status, local user) |
+| `framer-motion` 11 | Transformer, layer list, cursor, toolbar animations |
 | `lucide-react` | Tool and panel icons |
 | `tailwindcss` 3 | Utility-class styling |
+| `socket.io-client` 4 | Real-time cursor presence |
+
+### `@aether/server`
+
+The Express + Socket.io backend. Dependencies:
+
+| Package | Purpose |
+|---|---|
+| `express` 4 | HTTP router for REST endpoints |
+| `socket.io` 4 | WebSocket server for cursor relay |
+| `@prisma/client` 5.22 | Type-safe database queries |
+| `cors` | `CORS` middleware — allows web origin |
+| `prisma` (dev) | Schema migration CLI (`db:push`, `db:generate`) |
+| `ts-node` (dev) | Run TypeScript server without a build step |
 
 ---
 
@@ -558,7 +879,7 @@ To add a new property (e.g., `cornerRadius`) to the inspector:
 |---|---|---|
 | **Phase 1** | Complete | Infinite canvas, pan, zoom, rect/circle placement, drag to move, glassmorphic UI |
 | **Phase 2** | Complete | Transformer with 8 resize handles, Inspector panel (position, size, fill, opacity), Layers panel |
-| **Phase 3** | Planned | Multi-select (rubber-band selection, shift-click), group/ungroup, z-order reordering via drag in Layers panel |
-| **Phase 4** | Planned | Text tool, corner radius, stroke width/color |
-| **Phase 5** | Planned | Export to PNG/SVG, local file save/load (JSON scene format) |
-| **Phase 6** | Planned | Real-time multiplayer via WebSockets (Yjs or Liveblocks) |
+| **Phase 3** | Complete | Express + Prisma backend, PostgreSQL persistence, debounced auto-save, Socket.io real-time cursors, SyncIndicator |
+| **Phase 4** | Planned | Multi-select (rubber-band selection, shift-click), group/ungroup, z-order reordering via drag in Layers panel |
+| **Phase 5** | Planned | Text tool, corner radius, stroke width/color |
+| **Phase 6** | Planned | Export to PNG/SVG, local file save/load (JSON scene format) |
