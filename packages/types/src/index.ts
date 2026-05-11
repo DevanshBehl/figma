@@ -6,6 +6,7 @@ export interface SceneNode {
   width: number;
   height: number;
   fill: string;
+  opacity: number;
 }
 
 export type ToolType = 'select' | 'rect' | 'circle';
