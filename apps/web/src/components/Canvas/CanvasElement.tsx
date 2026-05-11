@@ -20,6 +20,7 @@ export function CanvasElement({ element, isSelected, onMouseDown }: CanvasElemen
         width,
         height,
         backgroundColor: fill,
+        opacity: element.opacity ?? 1,
         borderRadius: type === 'circle' ? '50%' : '6px',
         cursor: 'move',
         outline: isSelected ? '2px solid #818cf8' : 'none',
