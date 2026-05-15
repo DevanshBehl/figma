@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { SceneNode, ToolType } from '@aether/types';
+import type { SceneNode, ToolType, AuthUser } from '@aether/types';
 
 // ─── Local-user helpers ───────────────────────────────────────────────────────
 
@@ -22,7 +22,6 @@ interface LocalUser {
 function makeLocalUser(): LocalUser {
   const color = CURSOR_COLORS[Math.floor(Math.random() * CURSOR_COLORS.length)];
   const name  = GUEST_NAMES[Math.floor(Math.random() * GUEST_NAMES.length)];
-  // Short UUID prefix — readable in the cursor badge
   const id    = typeof crypto !== 'undefined'
     ? crypto.randomUUID().slice(0, 8)
     : String(Math.random()).slice(2, 10);
@@ -40,12 +39,16 @@ interface CanvasState {
   activeTool:        ToolType;
 
   // Persistence
-  projectId:  string | null;
-  saveStatus: SaveStatus;
-  lastSaved:  Date | null;
+  projectId:   string | null;
+  projectName: string;
+  saveStatus:  SaveStatus;
+  lastSaved:   Date | null;
+
+  // Auth
+  authUser:  AuthUser | null;
 
   // Presence
-  localUser:  LocalUser;
+  localUser: LocalUser;
 
   // Actions
   addElement:    (element: SceneNode) => void;
@@ -53,6 +56,8 @@ interface CanvasState {
   removeElement: (id: string) => void;
   selectElement: (id: string | null) => void;
   setActiveTool: (tool: ToolType) => void;
+  setAuthUser:   (user: AuthUser | null) => void;
+  setProjectName:(name: string) => void;
 
   save:        () => Promise<void>;
   loadProject: (id: string) => Promise<void>;
@@ -70,8 +75,10 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   selectedElementId: null,
   activeTool:        'select',
   projectId:         null,
+  projectName:       'Untitled Project',
   saveStatus:        'idle',
   lastSaved:         null,
+  authUser:          null,
   localUser:         makeLocalUser(),
 
   // ── Scene mutations ──────────────────────────────────────────────────────
@@ -92,11 +99,13 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
   selectElement: (id) => set({ selectedElementId: id }),
   setActiveTool: (tool) => set({ activeTool: tool }),
+  setAuthUser:   (user) => set({ authUser: user }),
+  setProjectName:(name) => set({ projectName: name }),
 
   // ── Persistence ──────────────────────────────────────────────────────────
 
   save: async () => {
-    const { elements, projectId } = get();
+    const { elements, projectId, projectName, authUser } = get();
     if (elements.length === 0) return;
 
     set({ saveStatus: 'saving' });
@@ -105,7 +114,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       let id = projectId;
 
       if (id) {
-        // Update existing project
         const res = await fetch(`${API_URL}/api/projects/${id}`, {
           method:  'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -113,11 +121,14 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
       } else {
-        // Create new project
         const res = await fetch(`${API_URL}/api/projects`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ name: 'Untitled', nodes: elements }),
+          body:    JSON.stringify({
+            name:  projectName,
+            nodes: elements,
+            user:  authUser ?? undefined,
+          }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as { id: string };
@@ -136,8 +147,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     try {
       const res  = await fetch(`${API_URL}/api/projects/${id}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as { nodes: SceneNode[] };
-      set({ projectId: id, elements: data.nodes });
+      const data = (await res.json()) as { nodes: SceneNode[]; name: string };
+      set({ projectId: id, elements: data.nodes, projectName: data.name });
     } catch (err) {
       console.error('[aether] failed to load project:', err);
     }

@@ -15,9 +15,16 @@ export type ToolType = 'select' | 'rect' | 'circle';
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
+export interface AuthUser {
+  email: string;
+  name:  string;
+  image?: string;
+}
+
 export interface SaveProjectPayload {
   name:  string;
   nodes: SceneNode[];
+  user:  AuthUser;
 }
 
 export interface UpdateProjectPayload {
@@ -25,11 +32,13 @@ export interface UpdateProjectPayload {
 }
 
 export interface ProjectResponse {
-  id:        string;
-  name:      string;
-  nodes:     SceneNode[];
-  createdAt: string;
-  updatedAt: string;
+  id:           string;
+  name:         string;
+  nodes:        SceneNode[];
+  thumbnailUrl: string | null;
+  userId:       string | null;
+  createdAt:    string;
+  updatedAt:    string;
 }
 
 // ─── Real-time presence ───────────────────────────────────────────────────────

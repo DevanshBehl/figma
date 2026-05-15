@@ -5,6 +5,7 @@ import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import projectRoutes from './routes/projects';
+import aiRoutes      from './routes/ai';
 import { registerCursorHandlers } from './socket/cursors';
 
 const PORT          = Number(process.env.PORT ?? 3001);
@@ -20,6 +21,7 @@ app.use(express.json({ limit: '4mb' })); // accommodate large node arrays
 
 // Routes
 app.use('/api', projectRoutes);
+app.use('/api', aiRoutes);
 
 // Health check — useful for load-balancer / docker health probes
 app.get('/health', (_, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
