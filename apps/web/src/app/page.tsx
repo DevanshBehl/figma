@@ -1,66 +1,35 @@
 'use client';
 
-import { motion, useScroll, useTransform } from 'framer-motion';
 import { useSession, signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useRef } from 'react';
-import { ArrowRight, Zap, Layers, MousePointer2, Github } from 'lucide-react';
-
-// ─── Animation variants ───────────────────────────────────────────────────────
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 32 },
-  show:   { opacity: 1, y: 0, transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] } },
-};
-
-const stagger = {
-  hidden: {},
-  show:   { transition: { staggerChildren: 0.12 } },
-};
-
-const scaleIn = {
-  hidden: { opacity: 0, scale: 0.9 },
-  show:   { opacity: 1, scale: 1, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } },
-};
-
-// ─── Feature cards data ───────────────────────────────────────────────────────
+import { ArrowRight, Zap, Layers, MousePointer2, Github, Cpu } from 'lucide-react';
 
 const features = [
   {
     icon:  Zap,
     title: 'Real-Time Collaboration',
-    desc:  'See teammates’ cursors live. Every change syncs in milliseconds via WebSockets.',
-    gradient: 'from-violet-500/20 to-indigo-500/20',
-    border:   'border-violet-500/20',
-    glow:     'group-hover:shadow-violet-500/20',
+    desc:  'Live cursors and delta sync via WebSockets. Every change propagates in milliseconds.',
   },
   {
     icon:  Layers,
     title: 'Infinite Canvas',
-    desc:  'Pan, zoom, and organize your work on an infinite canvas that never runs out of space.',
-    gradient: 'from-cyan-500/20 to-blue-500/20',
-    border:   'border-cyan-500/20',
-    glow:     'group-hover:shadow-cyan-500/20',
+    desc:  'Pan and zoom freely. Frames, groups, and auto-layout keep your work organized at any scale.',
   },
   {
     icon:  MousePointer2,
-    title: 'Precision Tools',
-    desc:  'Pixel-perfect positioning, resize handles, and an inspector panel for every property.',
-    gradient: 'from-rose-500/20 to-pink-500/20',
-    border:   'border-rose-500/20',
-    glow:     'group-hover:shadow-rose-500/20',
+    title: 'Precision Controls',
+    desc:  'Pixel-perfect transforms, resize handles, and a full-featured inspector for every property.',
+  },
+  {
+    icon:  Cpu,
+    title: 'AI Architect',
+    desc:  'Describe a layout in plain English. The AI generates production-ready layers in seconds.',
   },
 ];
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
 export default function LandingPage() {
   const { data: session, status } = useSession();
-  const router   = useRouter();
-  const heroRef  = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: heroRef });
-  const heroY    = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);
-  const heroOpacity = useTransform(scrollYProgress, [0, 0.7], [1, 0]);
+  const router = useRouter();
 
   function handleCTA() {
     if (status === 'authenticated') {
@@ -71,312 +40,210 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#030712] text-white overflow-x-hidden">
+    <div className="min-h-screen bg-[#0E0E0E] text-[#EDEDED]">
 
-      {/* ── Ambient gradient orbs ─────────────────────────────────────────── */}
-      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden>
-        <motion.div
-          className="absolute -top-64 -left-64 w-[700px] h-[700px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 70%)' }}
-          animate={{ x: [0, 40, 0], y: [0, 30, 0] }}
-          transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <motion.div
-          className="absolute top-1/3 -right-64 w-[600px] h-[600px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%)' }}
-          animate={{ x: [0, -50, 0], y: [0, 40, 0] }}
-          transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut', delay: 3 }}
-        />
-        <motion.div
-          className="absolute bottom-0 left-1/3 w-[500px] h-[500px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(6,182,212,0.12) 0%, transparent 70%)' }}
-          animate={{ x: [0, 30, 0], y: [0, -40, 0] }}
-          transition={{ duration: 26, repeat: Infinity, ease: 'easeInOut', delay: 7 }}
-        />
-        {/* Subtle noise texture overlay */}
-        <div className="absolute inset-0 opacity-[0.03]"
-          style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 256 256\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noise\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'4\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noise)\'/%3E%3C/svg%3E")' }}
-        />
-      </div>
-
-      {/* ── Navigation ───────────────────────────────────────────────────── */}
-      <motion.nav
-        initial={{ opacity: 0, y: -16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className="fixed top-0 inset-x-0 z-50 flex items-center justify-between px-8 py-5"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
-            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4)' }}>
-            A
+      {/* ── Nav ───────────────────────────────────────────────────────── */}
+      <nav className="fixed top-0 inset-x-0 z-50 h-11 flex items-center justify-between px-6 bg-[#1A1A1A] border-b border-[#2C2C2C]">
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 rounded-sm bg-[#0099FF] flex items-center justify-center flex-shrink-0">
+            <span className="text-white text-[9px] font-bold">A</span>
           </div>
-          <span className="text-sm font-semibold tracking-wide text-white/90">Aether</span>
+          <span className="text-xs font-semibold text-[#EDEDED]">Aether</span>
         </div>
 
-        {/* Glassmorphic pill nav */}
-        <div className="hidden md:flex items-center gap-1 px-1.5 py-1.5 rounded-full border border-white/10 backdrop-blur-xl"
-          style={{ background: 'rgba(255,255,255,0.04)' }}>
+        <div className="hidden md:flex items-center gap-0.5">
           {['Features', 'Pricing', 'Docs'].map((item) => (
-            <button key={item} className="px-4 py-1.5 text-xs text-white/60 hover:text-white rounded-full hover:bg-white/8 transition-all">
+            <button
+              key={item}
+              className="px-3 h-7 text-xs text-[#8A8A8A] hover:text-[#EDEDED] hover:bg-[#2C2C2C] rounded-sm transition-colors duration-75"
+            >
               {item}
             </button>
           ))}
         </div>
 
-        <motion.button
+        <button
           onClick={handleCTA}
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
-          className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-full border border-white/15 text-white/80 hover:text-white hover:border-white/30 transition-all backdrop-blur-sm"
-          style={{ background: 'rgba(255,255,255,0.06)' }}
+          className="flex items-center gap-1.5 px-3 h-7 text-xs font-semibold bg-[#0099FF] text-white rounded-sm hover:bg-[#0088EE] transition-colors duration-75"
         >
-          <Github className="w-3.5 h-3.5" />
+          <Github className="w-3 h-3" />
           {status === 'authenticated' ? 'Dashboard' : 'Sign in'}
-        </motion.button>
-      </motion.nav>
+        </button>
+      </nav>
 
-      {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section ref={heroRef} className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-24 pb-16">
-        <motion.div style={{ y: heroY, opacity: heroOpacity }} className="flex flex-col items-center text-center max-w-5xl mx-auto">
-
-          {/* Badge */}
-          <motion.div
-            variants={fadeUp} initial="hidden" animate="show"
-            className="inline-flex items-center gap-2 px-4 py-1.5 mb-8 rounded-full border text-xs font-medium tracking-widest uppercase"
-            style={{ background: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.3)', color: 'rgba(165,180,252,0.9)' }}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-            Now in Open Beta
-          </motion.div>
-
-          {/* Headline */}
-          <motion.h1
-            variants={stagger} initial="hidden" animate="show"
-            className="text-6xl md:text-8xl font-black tracking-tight leading-[0.9] mb-8"
-          >
-            <motion.span variants={fadeUp} className="block text-white">
-              Design
-            </motion.span>
-            <motion.span
-              variants={fadeUp}
-              className="block"
-              style={{ background: 'linear-gradient(135deg, #818cf8 0%, #c084fc 40%, #67e8f9 80%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}
-            >
-              Without Limits
-            </motion.span>
-          </motion.h1>
-
-          {/* Subheading */}
-          <motion.p
-            variants={fadeUp} initial="hidden" animate="show"
-            transition={{ delay: 0.3 }}
-            className="text-lg md:text-xl text-white/50 max-w-xl leading-relaxed mb-12"
-          >
-            Collaborative, real-time design for teams that move fast.
-            An infinite canvas. Live cursors. Auto-sync.
-          </motion.p>
-
-          {/* CTA row */}
-          <motion.div
-            variants={stagger} initial="hidden" animate="show"
-            transition={{ delayChildren: 0.45, staggerChildren: 0.1 }}
-            className="flex flex-col sm:flex-row items-center gap-4"
-          >
-            <motion.button
-              variants={fadeUp}
+      {/* ── Hero ──────────────────────────────────────────────────────── */}
+      <section className="pt-28 pb-16 px-6 max-w-5xl mx-auto">
+        <div className="max-w-3xl">
+          <p className="text-[11px] font-semibold text-[#0099FF] uppercase tracking-widest mb-5">
+            Open-source design tool
+          </p>
+          <h1 className="text-5xl md:text-7xl font-black tracking-tight leading-[0.93] mb-6 text-[#EDEDED]">
+            Design tool<br />
+            for engineers.
+          </h1>
+          <p className="text-sm text-[#8A8A8A] max-w-lg leading-relaxed mb-10">
+            Infinite canvas. Real-time collaboration. AI-powered layout generation.
+            Built with the same tools your stack already uses.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
               onClick={handleCTA}
-              whileHover={{ scale: 1.04, boxShadow: '0 0 40px rgba(99,102,241,0.4)' }}
-              whileTap={{ scale: 0.97 }}
-              className="group flex items-center gap-3 px-7 py-3.5 rounded-full text-sm font-bold text-white transition-all"
-              style={{ background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' }}
+              className="flex items-center gap-2 px-4 h-8 text-xs font-semibold bg-[#0099FF] text-white rounded-sm hover:bg-[#0088EE] transition-colors duration-75"
             >
               Start Designing
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </motion.button>
+              <ArrowRight className="w-3 h-3" />
+            </button>
+            <button className="flex items-center gap-1.5 px-4 h-8 text-xs text-[#8A8A8A] border border-[#2C2C2C] rounded-sm hover:text-[#EDEDED] hover:border-[#8A8A8A] transition-colors duration-75">
+              <Github className="w-3 h-3" />
+              View on GitHub
+            </button>
+          </div>
+        </div>
+      </section>
 
-            <motion.button
-              variants={fadeUp}
-              className="px-7 py-3.5 rounded-full text-sm font-medium text-white/60 hover:text-white border border-white/10 hover:border-white/20 transition-all backdrop-blur-sm"
-              style={{ background: 'rgba(255,255,255,0.04)' }}
-            >
-              Watch Demo
-            </motion.button>
-          </motion.div>
+      {/* ── App preview ───────────────────────────────────────────────── */}
+      <section className="px-6 max-w-6xl mx-auto mb-24">
+        <div className="rounded-sm border border-[#2C2C2C] overflow-hidden">
+          {/* Mock top bar */}
+          <div className="h-9 bg-[#1A1A1A] border-b border-[#2C2C2C] flex items-center px-4 gap-3">
+            <div className="w-4 h-4 rounded-sm bg-[#0099FF] flex items-center justify-center flex-shrink-0">
+              <span className="text-white text-[8px] font-bold">A</span>
+            </div>
+            <span className="text-[11px] font-semibold text-[#EDEDED]">Aether</span>
+            <div className="h-3 w-px bg-[#2C2C2C]" />
+            <span className="text-[10px] text-[#8A8A8A]">My Project</span>
+            <span className="text-[10px] text-[#8A8A8A] border border-[#2C2C2C] px-1 py-px rounded-sm tabular-nums ml-1">5 layers</span>
+            <div className="ml-auto flex items-center gap-1.5">
+              <div className="h-6 px-2 flex items-center gap-1.5 bg-[#111111] border border-[#2C2C2C] rounded-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
+                <span className="text-[10px] text-[#22c55e]">Saved</span>
+              </div>
+              <div className="h-6 px-2 flex items-center text-[10px] text-[#8A8A8A] bg-[#111111] border border-[#2C2C2C] rounded-sm gap-1">
+                Share
+              </div>
+            </div>
+          </div>
 
-          {/* Social proof */}
-          <motion.p
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9 }}
-            className="mt-8 text-xs text-white/30"
-          >
-            No credit card required &nbsp;·&nbsp; Free forever on solo plan
-          </motion.p>
-        </motion.div>
-
-        {/* ── App preview card ─────────────────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: 60, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ delay: 0.6, duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-          className="mt-20 w-full max-w-4xl mx-auto"
-        >
-          {/* Glow */}
-          <div className="absolute inset-x-0 top-8 h-32 blur-3xl opacity-30 pointer-events-none"
-            style={{ background: 'linear-gradient(to right, #6366f1, #8b5cf6, #06b6d4)' }} />
-
-          {/* Card */}
-          <div className="relative rounded-2xl border overflow-hidden"
-            style={{ background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.08)', boxShadow: '0 40px 120px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
-
-            {/* Fake traffic light */}
-            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-white/6">
-              {['#ff5f57', '#febc2e', '#28c840'].map((c) => (
-                <div key={c} className="w-2.5 h-2.5 rounded-full" style={{ background: c }} />
-              ))}
-              <div className="mx-auto px-24 py-0.5 rounded text-[10px] text-white/20"
-                style={{ background: 'rgba(255,255,255,0.05)' }}>
-                aether.design/editor/abc123
+          {/* Mock editor body */}
+          <div className="flex" style={{ height: 340 }}>
+            {/* Left panel mock */}
+            <div className="w-40 bg-[#1A1A1A] border-r border-[#2C2C2C] flex flex-col">
+              <div className="h-7 border-b border-[#2C2C2C] px-3 flex items-center">
+                <span className="text-[10px] font-semibold text-[#8A8A8A] uppercase tracking-widest">Layers</span>
+              </div>
+              <div className="py-1">
+                {['Frame 1', 'Rectangle', 'Circle', 'Rectangle', 'Circle'].map((l, i) => (
+                  <div
+                    key={i}
+                    className="h-6 flex items-center px-3 gap-1.5 text-[10px]"
+                    style={{
+                      paddingLeft: i === 0 ? 12 : 24,
+                      background:  i === 0 ? 'rgba(0,153,255,0.10)' : 'transparent',
+                      borderLeft:  i === 0 ? '2px solid #0099FF' : '2px solid transparent',
+                      color:       i === 0 ? '#EDEDED' : '#8A8A8A',
+                    }}
+                  >
+                    {l}
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Canvas preview */}
-            <div className="relative h-64 md:h-96 overflow-hidden"
-              style={{ background: 'radial-gradient(ellipse at center, #0f0f1a 0%, #030712 100%)' }}>
+            {/* Canvas */}
+            <div className="flex-1 bg-[#0E0E0E] relative overflow-hidden">
               {/* Dot grid */}
-              <div className="absolute inset-0 opacity-20"
-                style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.4) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
-
-              {/* Mock canvas elements */}
-              {[
-                { x: '12%',  y: '20%', w: 160, h: 100, color: '#6366f1', r: 8,  delay: 0.8 },
-                { x: '38%',  y: '32%', w: 220, h: 130, color: '#8b5cf6', r: 12, delay: 0.95 },
-                { x: '68%',  y: '18%', w: 140, h: 140, color: '#06b6d4', r: 9999, delay: 1.1 },
-                { x: '22%',  y: '58%', w: 180, h: 80,  color: '#f43f5e', r: 8,  delay: 1.2 },
-                { x: '58%',  y: '55%', w: 120, h: 120, color: '#10b981', r: 8,  delay: 1.3 },
-              ].map((el, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 0.85, scale: 1 }}
-                  transition={{ delay: el.delay, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                  className="absolute"
-                  style={{ left: el.x, top: el.y, width: el.w, height: el.h, background: el.color, borderRadius: el.r, opacity: 0.75 }}
-                />
-              ))}
-
+              <div
+                className="absolute inset-0 opacity-20"
+                style={{
+                  backgroundImage:    'radial-gradient(circle, rgba(255,255,255,0.5) 1px, transparent 1px)',
+                  backgroundSize:     '28px 28px',
+                }}
+              />
+              {/* Mock elements */}
+              <div className="absolute" style={{ left: 80,  top: 50,  width: 200, height: 150, border: '1px dashed #3A3A3A', background: 'rgba(255,255,255,0.02)' }} />
+              <div className="absolute" style={{ left: 100, top: 70,  width: 80,  height: 50,  background: '#0099FF',  borderRadius: 3, opacity: 0.85 }} />
+              <div className="absolute" style={{ left: 100, top: 130, width: 50,  height: 50,  background: '#a855f7', borderRadius: '50%', opacity: 0.85 }} />
+              <div className="absolute" style={{ left: 160, top: 130, width: 80,  height: 50,  background: '#22c55e', borderRadius: 3, opacity: 0.85 }} />
+              {/* Selection box */}
+              <div className="absolute" style={{ left: 99, top: 69, width: 82, height: 52, border: '1px solid #0099FF' }} />
+              <div className="absolute w-1.5 h-1.5 bg-[#1A1A1A] border border-[#0099FF]" style={{ left: 95,  top: 65 }} />
+              <div className="absolute w-1.5 h-1.5 bg-[#1A1A1A] border border-[#0099FF]" style={{ left: 177, top: 65 }} />
+              <div className="absolute w-1.5 h-1.5 bg-[#1A1A1A] border border-[#0099FF]" style={{ left: 95,  top: 116 }} />
+              <div className="absolute w-1.5 h-1.5 bg-[#1A1A1A] border border-[#0099FF]" style={{ left: 177, top: 116 }} />
               {/* Mock cursor */}
-              <motion.div
-                className="absolute pointer-events-none"
-                animate={{ x: [80, 260, 180, 320, 200], y: [60, 140, 90, 200, 120] }}
-                transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <path d="M4 2L16 10L10 11L7 18L4 2Z" fill="#a855f7" stroke="white" strokeWidth="1" />
+              <div className="absolute pointer-events-none" style={{ left: 320, top: 110 }}>
+                <svg width="14" height="16" viewBox="0 0 14 16" fill="none">
+                  <path d="M3 1L12 8L7.5 9L5.5 15L3 1Z" fill="#a855f7" stroke="white" strokeWidth="1" />
                 </svg>
-                <div className="mt-1 px-2 py-0.5 rounded text-[9px] font-medium text-white whitespace-nowrap"
-                  style={{ background: '#a855f7' }}>Nova</div>
-              </motion.div>
+                <div className="mt-0.5 px-1.5 py-px rounded-sm text-[9px] font-semibold text-white whitespace-nowrap" style={{ background: '#a855f7' }}>Nova</div>
+              </div>
+            </div>
+
+            {/* Right inspector mock */}
+            <div className="w-52 bg-[#1A1A1A] border-l border-[#2C2C2C] flex flex-col">
+              <div className="h-7 border-b border-[#2C2C2C] px-3 flex items-center">
+                <span className="text-[10px] font-semibold text-[#8A8A8A] uppercase tracking-widest">Inspect</span>
+              </div>
+              <div className="p-3 flex flex-col gap-2.5">
+                {[['X', '100'], ['Y', '70'], ['W', '80'], ['H', '50']].map(([l, v]) => (
+                  <div key={l} className="flex flex-col gap-1">
+                    <span className="text-[9px] font-semibold text-[#8A8A8A] uppercase tracking-widest">{l}</span>
+                    <div className="h-6 bg-[#111111] rounded-sm px-2 flex items-center text-[11px] text-[#EDEDED]">{v}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </motion.div>
-
-        {/* Scroll hint */}
-        <motion.div
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.4 }}
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
-        >
-          <motion.div animate={{ y: [0, 6, 0] }} transition={{ duration: 1.5, repeat: Infinity }}
-            className="w-5 h-8 rounded-full border border-white/20 flex items-start justify-center pt-1.5">
-            <div className="w-1 h-2 rounded-full bg-white/40" />
-          </motion.div>
-        </motion.div>
-      </section>
-
-      {/* ── Features ─────────────────────────────────────────────────────── */}
-      <section className="relative px-6 py-32">
-        <motion.div
-          variants={stagger} initial="hidden" whileInView="show"
-          viewport={{ once: true, margin: '-80px' }}
-          className="max-w-5xl mx-auto"
-        >
-          <motion.div variants={fadeUp} className="text-center mb-20">
-            <p className="text-xs font-semibold tracking-widest uppercase mb-4"
-              style={{ color: 'rgba(129,140,248,0.8)' }}>
-              Everything you need
-            </p>
-            <h2 className="text-4xl md:text-5xl font-black tracking-tight text-white">
-              Built for the way<br />
-              <span style={{ background: 'linear-gradient(135deg, #818cf8, #c084fc)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-                modern teams work
-              </span>
-            </h2>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-5">
-            {features.map((f) => (
-              <motion.div
-                key={f.title}
-                variants={scaleIn}
-                whileHover={{ y: -6, transition: { duration: 0.2 } }}
-                className={`group relative rounded-2xl p-7 border transition-all duration-300 ${f.border} ${f.glow} hover:shadow-2xl`}
-                style={{ background: `linear-gradient(135deg, ${f.gradient.replace('from-', '').replace(' to-', ', ')})` }}
-              >
-                {/* Subtle inner glow on hover */}
-                <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                  style={{ background: 'radial-gradient(ellipse at top left, rgba(255,255,255,0.06) 0%, transparent 60%)' }} />
-
-                <div className="relative">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-5"
-                    style={{ background: 'rgba(255,255,255,0.08)' }}>
-                    <f.icon className="w-5 h-5 text-white/80" />
-                  </div>
-                  <h3 className="text-base font-bold text-white mb-2">{f.title}</h3>
-                  <p className="text-sm text-white/50 leading-relaxed">{f.desc}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      </section>
-
-      {/* ── CTA strip ────────────────────────────────────────────────────── */}
-      <section className="relative px-6 py-32">
-        <div className="absolute inset-x-0 top-0 h-px"
-          style={{ background: 'linear-gradient(to right, transparent, rgba(99,102,241,0.3), transparent)' }} />
-
-        <motion.div
-          variants={stagger} initial="hidden" whileInView="show"
-          viewport={{ once: true, margin: '-80px' }}
-          className="max-w-2xl mx-auto text-center"
-        >
-          <motion.h2 variants={fadeUp} className="text-4xl md:text-5xl font-black tracking-tight text-white mb-6">
-            Ready to create?
-          </motion.h2>
-          <motion.p variants={fadeUp} className="text-white/50 mb-10 text-lg">
-            Join thousands of designers using Aether to ship faster.
-          </motion.p>
-          <motion.button
-            variants={fadeUp}
-            onClick={handleCTA}
-            whileHover={{ scale: 1.04, boxShadow: '0 0 60px rgba(99,102,241,0.5)' }}
-            whileTap={{ scale: 0.97 }}
-            className="inline-flex items-center gap-3 px-8 py-4 rounded-full text-base font-bold text-white transition-all"
-            style={{ background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 60%, #06b6d4 100%)' }}
-          >
-            <Github className="w-4 h-4" />
-            Get Started Free
-          </motion.button>
-        </motion.div>
-      </section>
-
-      {/* ── Footer ───────────────────────────────────────────────────────── */}
-      <footer className="px-8 py-8 border-t border-white/6 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold"
-            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>A</div>
-          <span className="text-xs text-white/40">Aether Design Tool</span>
         </div>
-        <p className="text-xs text-white/25">© 2026 Aether</p>
+      </section>
+
+      {/* ── Features ──────────────────────────────────────────────────── */}
+      <section className="px-6 pb-24 max-w-5xl mx-auto">
+        <p className="text-[11px] font-semibold text-[#8A8A8A] uppercase tracking-widest mb-6">Features</p>
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+          {features.map(({ icon: Icon, title, desc }) => (
+            <div
+              key={title}
+              className="p-5 rounded-sm border border-[#2C2C2C] bg-[#1A1A1A] hover:border-[#8A8A8A] transition-colors duration-75"
+            >
+              <div className="w-7 h-7 rounded-sm bg-[#111111] border border-[#2C2C2C] flex items-center justify-center mb-4">
+                <Icon className="w-3.5 h-3.5 text-[#8A8A8A]" />
+              </div>
+              <h3 className="text-xs font-bold text-[#EDEDED] mb-2">{title}</h3>
+              <p className="text-[11px] text-[#8A8A8A] leading-relaxed">{desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── CTA strip ─────────────────────────────────────────────────── */}
+      <section className="border-t border-[#2C2C2C] px-6 py-16">
+        <div className="max-w-2xl mx-auto">
+          <h2 className="text-2xl md:text-3xl font-black tracking-tight text-[#EDEDED] mb-3">
+            Ready to start designing?
+          </h2>
+          <p className="text-sm text-[#8A8A8A] mb-8">
+            Free to use. Open source. No credit card required.
+          </p>
+          <button
+            onClick={handleCTA}
+            className="flex items-center gap-2 px-5 h-9 text-xs font-semibold bg-[#0099FF] text-white rounded-sm hover:bg-[#0088EE] transition-colors duration-75"
+          >
+            <Github className="w-3.5 h-3.5" />
+            Get Started Free
+          </button>
+        </div>
+      </section>
+
+      {/* ── Footer ────────────────────────────────────────────────────── */}
+      <footer className="border-t border-[#2C2C2C] px-6 py-5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded-sm bg-[#0099FF] flex items-center justify-center">
+            <span className="text-white text-[8px] font-bold">A</span>
+          </div>
+          <span className="text-[11px] text-[#8A8A8A]">Aether Design Tool</span>
+        </div>
+        <p className="text-[11px] text-[#8A8A8A]">© 2026 Aether</p>
       </footer>
     </div>
   );

@@ -1,5 +1,12 @@
 import { create } from 'zustand';
 import type { SceneNode, ToolType, AuthUser } from '@aether/types';
+import {
+  findNode,
+  updateNodeInTree,
+  removeNodeFromTree,
+  reparentNode,
+  calculateAutoLayout,
+} from '@/lib/layout';
 
 // ─── Local-user helpers ───────────────────────────────────────────────────────
 
@@ -33,7 +40,7 @@ function makeLocalUser(): LocalUser {
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 interface CanvasState {
-  // Canvas scene
+  // Canvas scene — root-level nodes; children are embedded in SceneNode.children
   elements:          SceneNode[];
   selectedElementId: string | null;
   activeTool:        ToolType;
@@ -50,15 +57,20 @@ interface CanvasState {
   // Presence
   localUser: LocalUser;
 
-  // Actions
-  addElement:    (element: SceneNode) => void;
-  updateElement: (id: string, update: Partial<SceneNode>) => void;
-  removeElement: (id: string) => void;
-  selectElement: (id: string | null) => void;
-  setActiveTool: (tool: ToolType) => void;
-  setAuthUser:   (user: AuthUser | null) => void;
-  setProjectName:(name: string) => void;
+  // ── Scene mutations (all tree-aware, no direct mutation) ──────────────────
+  addElement:       (element: SceneNode) => void;
+  updateElement:    (id: string, update: Partial<SceneNode>) => void;
+  removeElement:    (id: string) => void;
+  selectElement:    (id: string | null) => void;
+  setActiveTool:    (tool: ToolType) => void;
+  setAuthUser:      (user: AuthUser | null) => void;
+  setProjectName:   (name: string) => void;
 
+  // ── Tree operations ───────────────────────────────────────────────────────
+  reparentElement:  (nodeId: string, newParentId: string | null) => void;
+  applyAutoLayout:  (frameId: string) => void;
+
+  // ── Persistence ───────────────────────────────────────────────────────────
   save:        () => Promise<void>;
   loadProject: (id: string) => Promise<void>;
 }
@@ -88,19 +100,29 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
   updateElement: (id, update) =>
     set((s) => ({
-      elements: s.elements.map((el) => (el.id === id ? { ...el, ...update } : el)),
+      elements: updateNodeInTree(s.elements, id, (n) => ({ ...n, ...update })),
     })),
 
   removeElement: (id) =>
     set((s) => ({
-      elements:          s.elements.filter((el) => el.id !== id),
+      elements:          removeNodeFromTree(s.elements, id),
       selectedElementId: s.selectedElementId === id ? null : s.selectedElementId,
     })),
 
-  selectElement: (id) => set({ selectedElementId: id }),
-  setActiveTool: (tool) => set({ activeTool: tool }),
-  setAuthUser:   (user) => set({ authUser: user }),
-  setProjectName:(name) => set({ projectName: name }),
+  selectElement:  (id)   => set({ selectedElementId: id }),
+  setActiveTool:  (tool) => set({ activeTool: tool }),
+  setAuthUser:    (user) => set({ authUser: user }),
+  setProjectName: (name) => set({ projectName: name }),
+
+  // ── Tree operations ──────────────────────────────────────────────────────
+
+  reparentElement: (nodeId, newParentId) =>
+    set((s) => ({ elements: reparentNode(s.elements, nodeId, newParentId) })),
+
+  applyAutoLayout: (frameId) =>
+    set((s) => ({
+      elements: updateNodeInTree(s.elements, frameId, calculateAutoLayout),
+    })),
 
   // ── Persistence ──────────────────────────────────────────────────────────
 
@@ -154,3 +176,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     }
   },
 }));
+
+// ─── Stable selectors (use these to avoid re-renders) ────────────────────────
+
+export const selectFindNode = (id: string | null) =>
+  (s: CanvasState): SceneNode | null =>
+    id ? findNode(s.elements, id) ?? null : null;

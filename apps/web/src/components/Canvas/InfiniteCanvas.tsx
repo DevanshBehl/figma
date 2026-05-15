@@ -3,11 +3,12 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useCanvasStore } from '@/store/canvasStore';
+import { findNode, getAbsolutePosition } from '@/lib/layout';
 import { CanvasElement } from './CanvasElement';
 import { Transformer } from './Transformer';
 import { CursorPresence } from '@/components/Cursors/CursorPresence';
 import { usePresence } from '@/hooks/usePresence';
-import type { ToolType } from '@aether/types';
+import type { SceneNode, ToolType } from '@aether/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -19,30 +20,55 @@ interface Viewport {
 
 interface DragState {
   type: 'pan' | 'element';
-  startMouseX: number;
-  startMouseY: number;
+  startMouseX:    number;
+  startMouseY:    number;
   startViewportX: number;
   startViewportY: number;
-  elementId: string;
-  startElementX: number;
-  startElementY: number;
+  elementId:      string;
+  startElementX:  number;
+  startElementY:  number;
 }
 
-const MIN_SCALE = 0.05;
-const MAX_SCALE = 20;
+const MIN_SCALE       = 0.05;
+const MAX_SCALE       = 20;
 const ZOOM_SENSITIVITY = 0.001;
+
+// ─── RenderNode — recursive element renderer ─────────────────────────────────
+
+interface RenderNodeProps {
+  node:              SceneNode;
+  selectedElementId: string | null;
+  onMouseDown:       (e: React.MouseEvent, id: string) => void;
+}
+
+function RenderNode({ node, selectedElementId, onMouseDown }: RenderNodeProps) {
+  return (
+    <CanvasElement
+      element={node}
+      isSelected={node.id === selectedElementId}
+      onMouseDown={(e) => onMouseDown(e, node.id)}
+    >
+      {node.children?.map((child) => (
+        <RenderNode
+          key={child.id}
+          node={child}
+          selectedElementId={selectedElementId}
+          onMouseDown={onMouseDown}
+        />
+      ))}
+    </CanvasElement>
+  );
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function InfiniteCanvas() {
-  // containerRef = the overflow:hidden canvas div (mouse events, wheel, getBCR for coord math)
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, scale: 1 });
+  const [viewport, setViewport]     = useState<Viewport>({ x: 0, y: 0, scale: 1 });
   const [isSpaceDown, setIsSpaceDown] = useState(false);
-  const [isPanning, setIsPanning] = useState(false);
+  const [isPanning,   setIsPanning]  = useState(false);
 
-  // Refs for event handlers — avoid stale closures without re-registering listeners
   const viewportRef     = useRef(viewport);
   const isSpaceDownRef  = useRef(false);
   const activeToolRef   = useRef<ToolType>('select');
@@ -59,28 +85,32 @@ export function InfiniteCanvas() {
     setActiveTool,
   } = useCanvasStore();
 
-  // Sync refs
-  useEffect(() => { viewportRef.current    = viewport;  }, [viewport]);
-  useEffect(() => { elementsRef.current    = elements;  }, [elements]);
-  useEffect(() => { activeToolRef.current  = activeTool; }, [activeTool]);
+  useEffect(() => { viewportRef.current   = viewport;   }, [viewport]);
+  useEffect(() => { elementsRef.current   = elements;   }, [elements]);
+  useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
 
-  // Derived: selected element object (re-computed each render, always fresh)
+  // Derived: selected element (searches full tree)
   const selectedElement = selectedElementId
-    ? elements.find((el) => el.id === selectedElementId) ?? null
+    ? findNode(elements, selectedElementId) ?? null
     : null;
 
-  // ── Coordinate helpers ──────────────────────────────────────────────────────
+  // Absolute canvas position for the Transformer's bounding box
+  const absPos = selectedElement
+    ? getAbsolutePosition(elements, selectedElement.id)
+    : { x: 0, y: 0 };
+
+  // ── Coordinate helpers ──────────────────────────────────────────────────
   const screenToCanvas = useCallback((screenX: number, screenY: number) => {
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
     const vp = viewportRef.current;
     return {
-      x: (screenX - rect.left  - vp.x) / vp.scale,
-      y: (screenY - rect.top - vp.y) / vp.scale,
+      x: (screenX - rect.left - vp.x) / vp.scale,
+      y: (screenY - rect.top  - vp.y) / vp.scale,
     };
   }, []);
 
-  // ── Global mouse events (smooth drag even when cursor leaves canvas) ────────
+  // ── Global mouse events ─────────────────────────────────────────────────
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
       const drag = dragRef.current;
@@ -94,6 +124,8 @@ export function InfiniteCanvas() {
         });
       } else if (drag.type === 'element' && drag.elementId) {
         const vp = viewportRef.current;
+        // Delta is in canvas/local space — works for nested nodes because
+        // parent frames have no rotation or scale transform.
         updateElement(drag.elementId, {
           x: drag.startElementX! + (e.clientX - drag.startMouseX!) / vp.scale,
           y: drag.startElementY! + (e.clientY - drag.startMouseY!) / vp.scale,
@@ -114,7 +146,7 @@ export function InfiniteCanvas() {
     };
   }, [updateElement]);
 
-  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
@@ -131,6 +163,7 @@ export function InfiniteCanvas() {
       if (e.code === 'KeyV') setActiveTool('select');
       if (e.code === 'KeyR') setActiveTool('rect');
       if (e.code === 'KeyC') setActiveTool('circle');
+      if (e.code === 'KeyF') setActiveTool('frame');
 
       if (e.code === 'Escape') {
         setActiveTool('select');
@@ -162,7 +195,7 @@ export function InfiniteCanvas() {
     };
   }, [selectElement, setActiveTool]);
 
-  // ── Cmd+scroll zoom ─────────────────────────────────────────────────────────
+  // ── Cmd+scroll zoom ─────────────────────────────────────────────────────
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -171,13 +204,13 @@ export function InfiniteCanvas() {
       if (!e.metaKey && !e.ctrlKey) return;
       e.preventDefault();
 
-      const rect = el.getBoundingClientRect();
+      const rect   = el.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
-      const vp = viewportRef.current;
+      const vp     = viewportRef.current;
 
-      const factor    = Math.exp(-e.deltaY * ZOOM_SENSITIVITY * 3);
-      const newScale  = Math.min(MAX_SCALE, Math.max(MIN_SCALE, vp.scale * factor));
+      const factor   = Math.exp(-e.deltaY * ZOOM_SENSITIVITY * 3);
+      const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, vp.scale * factor));
 
       setViewport({
         scale: newScale,
@@ -190,12 +223,12 @@ export function InfiniteCanvas() {
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
-  // ── Canvas mouse down (pan / place shape / deselect) ───────────────────────
+  // ── Canvas mousedown (pan / place shape / deselect) ─────────────────────
   const handleCanvasMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (isSpaceDownRef.current) {
         dragRef.current = {
-          type: 'pan',
+          type:           'pan',
           startMouseX:    e.clientX,
           startMouseY:    e.clientY,
           startViewportX: viewportRef.current.x,
@@ -207,17 +240,19 @@ export function InfiniteCanvas() {
 
       const tool = activeToolRef.current;
 
-      if (tool === 'rect' || tool === 'circle') {
-        const pos = screenToCanvas(e.clientX, e.clientY);
+      if (tool === 'rect' || tool === 'circle' || tool === 'frame') {
+        const pos     = screenToCanvas(e.clientX, e.clientY);
+        const isFrame = tool === 'frame';
         addElement({
           id:      crypto.randomUUID(),
           type:    tool,
-          x:       pos.x - 50,
-          y:       pos.y - 50,
-          width:   100,
-          height:  100,
-          fill:    tool === 'rect' ? '#6366f1' : '#ec4899',
+          x:       pos.x - (isFrame ? 100 : 50),
+          y:       pos.y - (isFrame ? 75  : 50),
+          width:   isFrame ? 200 : 100,
+          height:  isFrame ? 150 : 100,
+          fill:    isFrame ? 'rgba(255,255,255,0.04)' : tool === 'rect' ? '#6366f1' : '#ec4899',
           opacity: 1,
+          ...(isFrame ? { children: [], layoutMode: 'none', gap: 8, padding: 12 } : {}),
         });
         setActiveTool('select');
         return;
@@ -228,17 +263,18 @@ export function InfiniteCanvas() {
     [screenToCanvas, addElement, selectElement, setActiveTool],
   );
 
-  // ── Element mouse down (select + drag) ──────────────────────────────────────
+  // ── Element mousedown (select + drag) ───────────────────────────────────
   const handleElementMouseDown = useCallback(
     (e: React.MouseEvent, elementId: string) => {
       if (isSpaceDownRef.current) return;
       const tool = activeToolRef.current;
-      if (tool === 'rect' || tool === 'circle') return; // let canvas place shape
+      if (tool === 'rect' || tool === 'circle' || tool === 'frame') return;
 
       e.stopPropagation();
       selectElement(elementId);
 
-      const element = elementsRef.current.find((el) => el.id === elementId);
+      // Search full tree (element may be nested inside a frame)
+      const element = findNode(elementsRef.current, elementId);
       if (!element) return;
 
       dragRef.current = {
@@ -255,31 +291,30 @@ export function InfiniteCanvas() {
     [selectElement],
   );
 
-  // ── Real-time presence ──────────────────────────────────────────────────────
+  // ── Real-time presence ──────────────────────────────────────────────────
   const { emitCursor, clearCursor } = usePresence(screenToCanvas);
 
-  // ── Cursor ──────────────────────────────────────────────────────────────────
+  // ── Cursor style ────────────────────────────────────────────────────────
   const cursor =
     isSpaceDown
       ? isPanning ? 'cursor-grabbing' : 'cursor-grab'
-      : activeTool === 'rect' || activeTool === 'circle'
+      : activeTool === 'rect' || activeTool === 'circle' || activeTool === 'frame'
         ? 'cursor-crosshair'
         : 'cursor-default';
 
-  // ── Dot grid (modulo keeps dots fixed in canvas space) ─────────────────────
+  // ── Dot grid ────────────────────────────────────────────────────────────
   const dotSpacing = Math.max(20, 40 * viewport.scale);
   const dotOffX    = ((viewport.x % dotSpacing) + dotSpacing) % dotSpacing;
   const dotOffY    = ((viewport.y % dotSpacing) + dotSpacing) % dotSpacing;
 
   return (
-    // Outer wrapper: no overflow restriction — Transformer SVG can overflow edge
     <div className="relative w-full h-full">
 
-      {/* ── Inner canvas: clips elements, owns mouse/wheel events ── */}
+      {/* Inner canvas: clips elements, owns mouse/wheel events */}
       <div
         ref={containerRef}
         className={`absolute inset-0 overflow-hidden select-none ${cursor}`}
-        style={{ background: '#030712' }}
+        style={{ background: '#0E0E0E' }}
         onMouseDown={handleCanvasMouseDown}
         onMouseMove={(e) => emitCursor(e.clientX, e.clientY)}
         onMouseLeave={clearCursor}
@@ -289,8 +324,8 @@ export function InfiniteCanvas() {
           aria-hidden
           className="absolute inset-0 pointer-events-none"
           style={{
-            backgroundImage:  `radial-gradient(circle, rgba(255,255,255,0.10) 1px, transparent 1px)`,
-            backgroundSize:   `${dotSpacing}px ${dotSpacing}px`,
+            backgroundImage:    `radial-gradient(circle, rgba(255,255,255,0.10) 1px, transparent 1px)`,
+            backgroundSize:     `${dotSpacing}px ${dotSpacing}px`,
             backgroundPosition: `${dotOffX}px ${dotOffY}px`,
           }}
         />
@@ -307,11 +342,11 @@ export function InfiniteCanvas() {
           }}
         >
           {elements.map((el) => (
-            <CanvasElement
+            <RenderNode
               key={el.id}
-              element={el}
-              isSelected={el.id === selectedElementId}
-              onMouseDown={(e) => handleElementMouseDown(e, el.id)}
+              node={el}
+              selectedElementId={selectedElementId}
+              onMouseDown={handleElementMouseDown}
             />
           ))}
         </div>
@@ -324,7 +359,7 @@ export function InfiniteCanvas() {
         </div>
       </div>
 
-      {/* ── Transformer: outside overflow:hidden so handles never clip ── */}
+      {/* Transformer: outside overflow:hidden so handles never clip */}
       <AnimatePresence>
         {selectedElement && (
           <Transformer
@@ -332,12 +367,14 @@ export function InfiniteCanvas() {
             element={selectedElement}
             viewport={viewport}
             isSpaceDown={isSpaceDown}
+            absX={absPos.x}
+            absY={absPos.y}
             onResize={(id, update) => updateElement(id, update)}
           />
         )}
       </AnimatePresence>
 
-      {/* ── Remote cursors (canvas-space → screen-space, pointer-events:none) ── */}
+      {/* Remote cursors */}
       <CursorPresence viewport={viewport} />
     </div>
   );

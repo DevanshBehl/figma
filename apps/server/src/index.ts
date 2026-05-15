@@ -1,7 +1,21 @@
-
-
 import express from 'express';
 import { createServer } from 'http';
+
+// ── Env validation ─────────────────────────────────────────────────────────────
+
+function validateEnv(): void {
+  const missing = ['DATABASE_URL'].filter((k) => !process.env[k]);
+  if (missing.length > 0) {
+    console.error(`\n  ✗ Missing required env vars: ${missing.join(', ')}`);
+    console.error('  Add them to apps/server/.env and restart.\n');
+    process.exit(1);
+  }
+  if (!process.env.MINIMAX_API_KEY) {
+    console.warn('  ⚠  MINIMAX_API_KEY not set — AI generation will return 503\n');
+  }
+}
+
+validateEnv();
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import projectRoutes from './routes/projects';
